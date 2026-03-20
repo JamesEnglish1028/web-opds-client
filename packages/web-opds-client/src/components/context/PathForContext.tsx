@@ -1,12 +1,10 @@
 import * as React from "react";
 import { PathFor } from "../../interfaces";
-import * as PropTypes from "prop-types";
 
 /**
- * This is a component that will pass the pathFor prop down the tree
- * via both old and new context apis.
+ * Provides the pathFor function to all descendants via modern React context.
+ * CatalogLink and Root read this via useContext(PathForContext).
  */
-
 export const PathForContext = React.createContext<PathFor | undefined>(
   undefined
 );
@@ -16,24 +14,12 @@ export type PathForProps = {
   children: React.ReactChild;
 };
 
-export default class PathForProvider extends React.Component<PathForProps> {
-  static childContextTypes: React.ValidationMap<{}> = {
-    pathFor: PropTypes.func.isRequired
-  };
-
-  getChildContext() {
-    return {
-      pathFor: this.props.pathFor
-    };
-  }
-
-  render() {
-    return (
-      <PathForContext.Provider value={this.props.pathFor}>
-        {this.props.children}
-      </PathForContext.Provider>
-    );
-  }
+export default function PathForProvider({ pathFor, children }: PathForProps) {
+  return (
+    <PathForContext.Provider value={pathFor}>
+      {children}
+    </PathForContext.Provider>
+  );
 }
 
 export function usePathFor() {

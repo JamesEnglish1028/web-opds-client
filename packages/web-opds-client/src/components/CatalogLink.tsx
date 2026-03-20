@@ -1,47 +1,53 @@
 import * as React from "react";
-import * as PropTypes from "prop-types";
-import { Link, Router } from "react-router";
-import { NavigateContext, Router as RouterType } from "../interfaces";
+import { PathForContext } from "./context/PathForContext";
+import { NavigationContext } from "./context/NavigationContext";
 
-export interface CatalogLinkProps extends React.HTMLProps<{}> {
+export interface CatalogLinkProps extends React.HTMLProps<HTMLAnchorElement> {
   collectionUrl?: string | null;
   bookUrl?: string | null;
 }
 
-/** Shows a link to another collection or book in the same OPDS catalog. */
-export default class CatalogLink extends React.Component<CatalogLinkProps, {}> {
-  context: NavigateContext;
+/**
+ * Shows a link to another collection or book in the same OPDS catalog.
+ * Uses modern React context (PathForContext + NavigationContext) instead of
+ * the legacy react-router v3 contextTypes API.
+ */
+export default function CatalogLink({
+  collectionUrl = null,
+  bookUrl = null,
+  ref,
+  onClick,
+  children,
+  ...props
+}: CatalogLinkProps) {
+  const pathFor = React.useContext(PathForContext);
+  const navigate = React.useContext(NavigationContext);
 
-  static contextTypes: React.ValidationMap<NavigateContext> = {
-    router: PropTypes.object.isRequired as React.Validator<RouterType>,
-    pathFor: PropTypes.func.isRequired
-  };
-
-  static childContextTypes: React.ValidationMap<NavigateContext> = {
-    router: PropTypes.object.isRequired as React.Validator<RouterType>
-  };
-
-  // provides full router context expected by but not actually used by Link
-  // see https://github.com/reactjs/react-router/blob/master/docs/API.md#contextrouter
-  // and https://github.com/reactjs/react-router/blob/master/modules/PropTypes.js
-  getChildContext() {
-    let noop = () => {};
-    let router: any = Object.assign({}, this.context.router, {
-      replace: noop,
-      go: noop,
-      goBack: noop,
-      goForward: noop,
-      setRouteLeaveHook: noop
-    });
-
-    return { router };
+  if (!pathFor) {
+    // No PathForContext provided — render an inert anchor
+    return <a onClick={onClick} {...props}>{children}</a>;
   }
 
-  render(): JSX.Element {
-    let { collectionUrl = null, bookUrl = null, ref, ...props } = this.props;
+  const href = pathFor(collectionUrl, bookUrl);
 
-    let location = this.context.pathFor(collectionUrl, bookUrl);
-
-    return <Link to={location} {...props} />;
+  function handleClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (onClick) onClick(e as any);
+    if (
+      !e.defaultPrevented &&
+      e.button === 0 &&
+      !e.metaKey &&
+      !e.altKey &&
+      !e.ctrlKey &&
+      !e.shiftKey
+    ) {
+      e.preventDefault();
+      if (navigate) navigate(href);
+    }
   }
+
+  return (
+    <a href={href} onClick={handleClick} {...props}>
+      {children}
+    </a>
+  );
 }

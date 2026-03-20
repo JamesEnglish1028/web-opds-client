@@ -1,5 +1,4 @@
 import * as React from "react";
-import * as PropTypes from "prop-types";
 import { Store } from "redux";
 import { connect } from "react-redux";
 import { State } from "../state";
@@ -25,13 +24,11 @@ import {
   CollectionData,
   BookData,
   StateProps,
-  NavigateContext,
   AuthCallback,
   AuthProvider,
   AuthMethod,
   AuthCredentials,
-  FacetGroupData,
-  Router as RouterType
+  FacetGroupData
 } from "../interfaces";
 import AuthPlugin from "../AuthPlugin";
 import { loanedBookData, collectionDataWithLoans } from "../utils";
@@ -102,6 +99,10 @@ export interface RootProps extends StateProps {
   setPreference: (key: string, value: string) => void;
   allLanguageSearch?: boolean;
   fetcher?: DataFetcher;
+  /** Injected by RootWithContext from NavigationContext. Replaces legacy context.router.push. */
+  navigate?: (path: string) => void;
+  /** Injected by RootWithContext from PathForContext. Replaces legacy context.pathFor. */
+  pathFor?: (collectionUrl: string, bookUrl: string) => string;
 }
 
 export interface RootState {
@@ -111,13 +112,6 @@ export interface RootState {
 /** The root component of the application that connects to the Redux store and
     passes props to other components. */
 export class Root extends React.Component<RootProps, RootState> {
-  context: NavigateContext;
-
-  static contextTypes: React.ValidationMap<NavigateContext> = {
-    router: PropTypes.object as React.Validator<RouterType>,
-    pathFor: PropTypes.func.isRequired
-  };
-
   constructor(props) {
     super(props);
     this.state = {};
@@ -429,7 +423,8 @@ export class Root extends React.Component<RootProps, RootState> {
 
   showRelativeBook(relativeIndex: number) {
     if (
-      this.context.router &&
+      this.props.navigate &&
+      this.props.pathFor &&
       this.props.collectionData &&
       this.props.bookData
     ) {
@@ -445,8 +440,8 @@ export class Root extends React.Component<RootProps, RootState> {
           (currentBookIndex + relativeIndex + bookIds.length) % bookIds.length;
         let nextBookUrl = books[nextBookIndex].url || books[nextBookIndex].id;
 
-        this.context.router.push(
-          this.context.pathFor(this.props.collectionData.url, nextBookUrl)
+        this.props.navigate(
+          this.props.pathFor(this.props.collectionData.url, nextBookUrl)
         );
       }
     }
@@ -461,4 +456,20 @@ const ConnectedRoot = connect(
   connectOptions
 )(Root);
 
-export default ConnectedRoot;
+import { PathForContext } from "./context/PathForContext";
+import { NavigationContext } from "./context/NavigationContext";
+
+type ConnectedRootProps = React.ComponentPropsWithoutRef<typeof ConnectedRoot>;
+
+/**
+ * Wrapper that reads navigate and pathFor from modern React context and
+ * forwards them as props to ConnectedRoot, replacing the legacy
+ * contextTypes: { router, pathFor } API.
+ */
+function RootWithContext(props: ConnectedRootProps) {
+  const navigate = React.useContext(NavigationContext);
+  const pathFor = React.useContext(PathForContext);
+  return <ConnectedRoot {...props} navigate={navigate} pathFor={pathFor} />;
+}
+
+export default RootWithContext;

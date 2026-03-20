@@ -1,0 +1,53 @@
+// Entry point filter buttons (All Books, Books, Audiobooks, etc.)
+// Displayed at the top of the lanes view, allowing users to switch
+// between different entry points from the OPDS feed.
+
+.entry-point-buttons {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 16px 0;
+  padding: 8px 0;
+
+  .entry-point-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border: 1px solid #D0D0CE;
+    border-radius: 20px;
+    background-color: #F5F5F4;
+    color: #1A1A1A;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      background-color: #E8E8E6;
+      border-color: #B0B0AE;
+    }
+
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(27, 127, 167, 0.25);
+      border-color: #1B7FA7;
+    }
+
+    &.active {
+      background-color: #1B7FA7;
+      color: #FFFFFF;
+      border-color: #1B7FA7;
+
+      &:hover {
+        background-color: #165878;
+        border-color: #165878;
+      }
+    }
+  }
+}
