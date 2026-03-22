@@ -37,15 +37,24 @@ const collection = (state = initialState, action): CollectionState => {
         error: action.error
       };
 
-    case ActionCreator.COLLECTION_LOAD:
+    case ActionCreator.COLLECTION_LOAD: {
+      // If the new collection has the same search URL as the old one, preserve
+      // the already-fetched searchData so the search bar never collapses.
+      const newSearch = action.data?.search;
+      const oldSearch = state.data?.search;
+      const mergedData =
+        newSearch && oldSearch && newSearch.url === oldSearch.url && oldSearch.searchData
+          ? { ...action.data, search: { ...newSearch, searchData: oldSearch.searchData } }
+          : action.data;
       return {
         ...state,
-        data: action.data,
+        data: mergedData,
         url: action.url ? action.url : state.url,
         isFetching: false,
         error: null,
         history: history(state, action)
       };
+    }
 
     case ActionCreator.COLLECTION_CLEAR:
       return {

@@ -33,19 +33,35 @@ export function bookIsBorrowable(
 }
 
 export function getMedium(book: BookData): BookMedium | "" {
-  if (!book.raw || !book.raw["$"] || !book.raw["$"]["schema:additionalType"]) {
-    return "";
+  const additionalType =
+    book.raw && book.raw["$"] && book.raw["$"]["schema:additionalType"]
+      ? book.raw["$"]["schema:additionalType"].value
+      : "";
+
+  if (additionalType) {
+    return additionalType;
   }
 
-  return book.raw["$"]["schema:additionalType"].value
-    ? book.raw["$"]["schema:additionalType"].value
-    : "";
+  // Some feeds omit schema:additionalType but still provide an audiobook
+  // acquisition media type; infer audiobook in that case.
+  const mediaTypes = [
+    ...(book.fulfillmentLinks || []).map((link) => link.type),
+    ...(book.openAccessLinks || []).map((link) => link.type)
+  ]
+    .filter(Boolean)
+    .map((type) => String(type).toLowerCase());
+
+  if (mediaTypes.some((type) => type.includes("audiobook"))) {
+    return "http://bib.schema.org/Audiobook";
+  }
+
+  return "";
 }
 
 export const bookMediumSvgMap: {
   [key in BookMedium]: {
     element: React.ReactNode;
-    label: "eBook" | "Audio";
+    label: "eBook" | "Audio" | "Periodical";
   };
 } = {
   "http://bib.schema.org/Audiobook": {
@@ -59,6 +75,10 @@ export const bookMediumSvgMap: {
   "http://schema.org/Book": {
     element: <BookIcon ariaHidden title="eBook Icon" />,
     label: "eBook"
+    },
+    "http://schema.org/PublicationIssue": {
+      element: <BookIcon ariaHidden title="Periodical Icon" />,
+      label: "Periodical"
   }
 };
 

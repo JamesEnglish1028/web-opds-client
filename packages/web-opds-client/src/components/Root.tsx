@@ -107,6 +107,7 @@ export interface RootProps extends StateProps {
 
 export interface RootState {
   authError?: string | null;
+  lastCollectionData?: CollectionData | null;
 }
 
 /** The root component of the application that connects to the Redux store and
@@ -114,34 +115,35 @@ export interface RootState {
 export class Root extends React.Component<RootProps, RootState> {
   constructor(props) {
     super(props);
-    this.state = {};
+    this.state = {
+      lastCollectionData: props.collectionData || null
+    };
   }
 
   render(): JSX.Element {
+    const stableCollectionData =
+      this.props.collectionData || this.state.lastCollectionData || null;
+
     let BookDetailsContainer = this.props.BookDetailsContainer;
     let Header = this.props.Header;
     let Footer = this.props.Footer;
     let CollectionContainer = this.props.CollectionContainer;
-    let collectionTitle = this.props.collectionData
-      ? this.props.collectionData.title
-      : null;
+    let collectionTitle = stableCollectionData ? stableCollectionData.title : null;
     let bookTitle = this.props.bookData ? this.props.bookData.title : null;
 
     let computeBreadcrumbs =
       this.props.computeBreadcrumbs || defaultComputeBreadcrumbs;
     let breadcrumbsLinks = computeBreadcrumbs(
-      this.props.collectionData,
+      stableCollectionData,
       this.props.history
     );
-    let showBreadcrumbs =
-      this.props.collectionData && breadcrumbsLinks.length > 0;
+    let showBreadcrumbs = stableCollectionData && breadcrumbsLinks.length > 0;
 
     let showCollection = this.props.collectionData && !this.props.bookData;
     const showBook = !!this.props.bookData;
     let showBookWrapper = this.props.bookUrl || this.props.bookData;
     let showUrlForm = !this.props.collectionUrl && !this.props.bookUrl;
-    let showSearch =
-      this.props.collectionData && this.props.collectionData.search;
+    let showSearch = stableCollectionData && stableCollectionData.search;
     // The tabs should only display if the component is passed and if
     // the catalog is being displayed and not a book.
     let showCollectionContainer = !!CollectionContainer && !showBook;
@@ -169,10 +171,16 @@ export class Root extends React.Component<RootProps, RootState> {
           >
             {showSearch && (
               <Search
-                url={this.props.collectionData?.search?.url}
-                searchData={this.props.collectionData?.search?.searchData}
+                url={stableCollectionData?.search?.url}
+                searchData={stableCollectionData?.search?.searchData}
                 fetchSearchDescription={this.props.fetchSearchDescription}
                 allLanguageSearch={allLanguageSearch}
+                router={
+                  this.props.navigate
+                    ? { push: this.props.navigate }
+                    : undefined
+                }
+                pathFor={this.props.pathFor}
               />
             )}
           </Header>
@@ -211,10 +219,16 @@ export class Root extends React.Component<RootProps, RootState> {
             )}
             {showSearch && (
               <Search
-                url={this.props.collectionData?.search?.url}
-                searchData={this.props.collectionData?.search?.searchData}
+                url={stableCollectionData?.search?.url}
+                searchData={stableCollectionData?.search?.searchData}
                 fetchSearchDescription={this.props.fetchSearchDescription}
                 allLanguageSearch={allLanguageSearch}
+                router={
+                  this.props.navigate
+                    ? { push: this.props.navigate }
+                    : undefined
+                }
+                pathFor={this.props.pathFor}
               />
             )}
           </div>
@@ -400,6 +414,13 @@ export class Root extends React.Component<RootProps, RootState> {
         nextProps.collectionUrl,
         nextProps.bookUrl
       );
+    }
+
+    if (
+      nextProps.collectionData &&
+      nextProps.collectionData !== this.state.lastCollectionData
+    ) {
+      this.setState({ lastCollectionData: nextProps.collectionData });
     }
 
     this.updatePageTitle(nextProps);

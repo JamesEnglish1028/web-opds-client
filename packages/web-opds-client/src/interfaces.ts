@@ -39,7 +39,8 @@ export interface FulfillmentLink extends MediaLink {
 export type BookMedium =
   | "http://bib.schema.org/Audiobook"
   | "http://schema.org/EBook"
-  | "http://schema.org/Book";
+  | "http://schema.org/Book"
+  | "http://schema.org/PublicationIssue";
 
 export type BookAvailability =
   | "available"
