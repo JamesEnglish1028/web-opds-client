@@ -17,9 +17,14 @@ export default class BookDetails<P extends BookDetailsProps> extends Book<P> {
   render(): JSX.Element {
     let fields = this.fields();
     const medium = getMedium(this.props.book);
+    const publicationType = this.props.book.series?.publicationType;
 
     return (
-      <div className="book-details">
+      <div
+        className="book-details"
+        data-medium={medium || undefined}
+        data-publication-type={publicationType || undefined}
+      >
         <div className="top" lang={this.props.book.language}>
           <div className="cover">
             <BookCover book={this.props.book} />

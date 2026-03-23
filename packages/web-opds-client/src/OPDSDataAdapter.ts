@@ -159,10 +159,12 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
   }
 
   const publicationType = extractPublicationType(entry.unparsed);
+  const fallbackSeries = extractSeriesFromRaw(entry.unparsed);
+  const baseSeries = entry.series || fallbackSeries;
   const series =
-    entry.series && publicationType
-      ? { ...entry.series, publicationType }
-      : entry.series;
+    baseSeries && publicationType
+      ? { ...baseSeries, publicationType }
+      : baseSeries;
 
   return <BookData>{
     id: entry.id,
@@ -191,13 +193,20 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
 
 function extractPublicationType(rawEntry: any): string | undefined {
   const rawSeries = rawEntry?.["schema:Series"] || rawEntry?.["schema:series"];
-  const rawSeriesAttributes = rawSeries?.[0]?.["$"];
+  const rawSeriesNode = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries;
+  const rawSeriesAttributes = rawSeriesNode?.["$"] ?? rawSeriesNode;
   const rawPublicationType =
     rawSeriesAttributes?.["simplified:publicationType"]?.value ||
-    rawSeriesAttributes?.["simplified:publicationtype"]?.value;
+    rawSeriesAttributes?.["simplified:publicationtype"]?.value ||
+    (typeof rawSeriesAttributes?.["simplified:publicationType"] === "string"
+      ? rawSeriesAttributes?.["simplified:publicationType"]
+      : undefined) ||
+    (typeof rawSeriesAttributes?.["simplified:publicationtype"] === "string"
+      ? rawSeriesAttributes?.["simplified:publicationtype"]
+      : undefined);
 
   if (rawPublicationType) {
-    return rawPublicationType;
+    return String(rawPublicationType).trim().toLowerCase();
   }
 
   const belongsTo = rawEntry?.metadata?.belongsTo || rawEntry?.belongsTo;
@@ -208,6 +217,45 @@ function extractPublicationType(rawEntry: any): string | undefined {
   }
 
   return undefined;
+}
+
+function extractSeriesFromRaw(
+  rawEntry: any
+): { name: string; position?: number } | undefined {
+  const rawSeries = rawEntry?.["schema:Series"] || rawEntry?.["schema:series"];
+  const rawSeriesNode = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries;
+  const rawSeriesAttributes = rawSeriesNode?.["$"] ?? rawSeriesNode;
+
+  const rawName = rawSeriesAttributes?.name;
+  const rawIsPartOf = rawEntry?.["schema:isPartOf"];
+  const isPartOfNode = Array.isArray(rawIsPartOf) ? rawIsPartOf[0] : rawIsPartOf;
+  const isPartOfName =
+    typeof isPartOfNode === "string"
+      ? isPartOfNode
+      : isPartOfNode?._ || isPartOfNode?.name;
+  const name = rawName ?? isPartOfName;
+
+  const rawPositionNode = rawSeriesNode?.position;
+  const positionNode = Array.isArray(rawPositionNode)
+    ? rawPositionNode[0]
+    : rawPositionNode;
+  const rawPosition =
+    typeof positionNode === "string"
+      ? positionNode
+      : positionNode?._ ?? positionNode;
+  const parsedPosition =
+    rawPosition !== undefined ? Number(rawPosition) : undefined;
+  const position = Number.isFinite(parsedPosition) ? parsedPosition : undefined;
+
+  const trimmedName = typeof name === "string" ? name.trim() : "";
+  if (!trimmedName && position === undefined) {
+    return undefined;
+  }
+
+  return {
+    name: trimmedName || "Series",
+    position,
+  };
 }
 
 function entryToLink(entry: OPDSEntry, feedUrl: string): LinkData | null {
