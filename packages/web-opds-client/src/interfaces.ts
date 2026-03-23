@@ -53,6 +53,7 @@ export interface BookData {
   series?: {
     name: string;
     position?: number;
+    publicationType?: string;
   } | null;
   authors?: string[];
   contributors?: string[];

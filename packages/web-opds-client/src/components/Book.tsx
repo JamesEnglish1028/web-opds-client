@@ -52,6 +52,7 @@ export default class Book<P extends BookProps> extends React.Component<P, {}> {
         className={`book ${showMediaIconClass}`}
         lang={book.language}
         data-medium={bookMedium || undefined}
+        data-publication-type={book.series?.publicationType || undefined}
       >
         <CatalogLink
           collectionUrl={this.props.collectionUrl}
