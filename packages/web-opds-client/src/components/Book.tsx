@@ -47,6 +47,12 @@ export default class Book<P extends BookProps> extends React.Component<P, {}> {
     // Display contributors only if there are no authors.
     const authors = hasAuthors ? book.authors?.join(", ") : contributors;
 
+    // Fulfillment and borrow links can appear as book.url; route details to a stable work URL.
+    const detailBookUrl =
+      (book.url && !book.url.includes("/fulfill/") && !book.url.includes("/borrow")
+        ? book.url
+        : book.id) || book.url;
+
     return (
       <div
         className={`book ${showMediaIconClass}`}
@@ -56,7 +62,7 @@ export default class Book<P extends BookProps> extends React.Component<P, {}> {
       >
         <CatalogLink
           collectionUrl={this.props.collectionUrl}
-          bookUrl={book.url || book.id}
+          bookUrl={detailBookUrl}
           title={book.title}
         >
           <BookCover book={book} />
@@ -81,7 +87,7 @@ export default class Book<P extends BookProps> extends React.Component<P, {}> {
             <div>
               <CatalogLink
                 collectionUrl={this.props.collectionUrl}
-                bookUrl={book.url || book.id}
+                bookUrl={detailBookUrl}
                 title={book.title}
               >
                 <div className="title">{book.title}</div>
@@ -117,7 +123,7 @@ export default class Book<P extends BookProps> extends React.Component<P, {}> {
               <span dangerouslySetInnerHTML={{ __html: summary }}></span>
               <CatalogLink
                 collectionUrl={this.props.collectionUrl}
-                bookUrl={book.url || book.id}
+                bookUrl={detailBookUrl}
                 title={book.title}
               >
                 &hellip; More
