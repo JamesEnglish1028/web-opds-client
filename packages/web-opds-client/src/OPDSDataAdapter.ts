@@ -334,7 +334,7 @@ function isArtworkLink(link: any): link is OPDSArtworkLink {
 }
 
 function isCompleteEntryLink(link: any): link is CompleteEntryLink {
-  return !!link && link.type === CompleteEntryLink.TYPE;
+  return !!link && link.rel === "alternate" && link.type === CompleteEntryLink.TYPE;
 }
 
 function isFacetLink(link: any): link is OPDSFacetLink {
