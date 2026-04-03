@@ -23,7 +23,8 @@ import {
 } from "./interfaces";
 
 let sanitizeHtml;
-const createDOMPurify = require("dompurify");
+const createDOMPurifyModule = require("dompurify");
+const createDOMPurify = createDOMPurifyModule.default || createDOMPurifyModule;
 if (typeof window === "undefined") {
   // sanitization needs to work server-side,
   // so we use jsdom to build it a window object
@@ -34,9 +35,8 @@ if (typeof window === "undefined") {
     ProcessExternalResources: false
   });
   const { window } = jsdom;
-  const { defaultView } = window;
 
-  sanitizeHtml = createDOMPurify(defaultView).sanitize;
+  sanitizeHtml = createDOMPurify(window).sanitize;
 } else {
   sanitizeHtml = createDOMPurify(window).sanitize;
 }
@@ -46,10 +46,10 @@ export function adapter(
   data: OPDSFeed | OPDSEntry,
   url: string
 ): CollectionData | BookData {
-  if (data instanceof OPDSFeed) {
+  if (isFeedLike(data)) {
     let collectionData = feedToCollection(data, url);
     return collectionData;
-  } else if (data instanceof OPDSEntry) {
+  } else if (isEntryLike(data)) {
     let bookData = entryToBook(data, url);
     return bookData;
   } else {
@@ -68,7 +68,7 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
 
   let imageUrl, imageThumbLink;
   let artworkLinks = entry.links.filter(link => {
-    return link instanceof OPDSArtworkLink;
+    return isArtworkLink(link);
   });
   if (artworkLinks.length > 0) {
     imageThumbLink = artworkLinks.find(
@@ -83,7 +83,7 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
   }
 
   let detailUrl;
-  let detailLink = entry.links.find(link => link instanceof CompleteEntryLink);
+  let detailLink = entry.links.find(link => isCompleteEntryLink(link));
   if (detailLink) {
     detailUrl = detailLink.href;
   }
@@ -94,10 +94,7 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
 
   let openAccessLinks = entry.links
     .filter(link => {
-      return (
-        link instanceof OPDSAcquisitionLink &&
-        link.rel === OPDSAcquisitionLink.OPEN_ACCESS_REL
-      );
+      return link.rel === OPDSAcquisitionLink.OPEN_ACCESS_REL;
     })
     .map(link => {
       return {
@@ -108,10 +105,7 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
 
   let borrowUrl;
   let borrowLink = <OPDSAcquisitionLink>entry.links.find(link => {
-    return (
-      link instanceof OPDSAcquisitionLink &&
-      link.rel === OPDSAcquisitionLink.BORROW_REL
-    );
+    return link.rel === OPDSAcquisitionLink.BORROW_REL;
   });
   if (borrowLink) {
     borrowUrl = borrowLink.href;
@@ -119,10 +113,7 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
 
   let allBorrowLinks: FulfillmentLink[] = entry.links
     .filter(link => {
-      return (
-        link instanceof OPDSAcquisitionLink &&
-        link.rel === OPDSAcquisitionLink.BORROW_REL
-      );
+      return link.rel === OPDSAcquisitionLink.BORROW_REL;
     })
     .map(link => {
       let indirectType;
@@ -141,10 +132,7 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
   let fulfillmentType;
   let fulfillmentLinks = entry.links
     .filter(link => {
-      return (
-        link instanceof OPDSAcquisitionLink &&
-        link.rel === OPDSAcquisitionLink.GENERIC_REL
-      );
+      return link.rel === OPDSAcquisitionLink.GENERIC_REL;
     })
     .map(link => {
       let indirectType;
@@ -164,16 +152,24 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
   let holds;
   let copies;
   let linkWithAvailability = <OPDSAcquisitionLink>entry.links.find(link => {
-    return link instanceof OPDSAcquisitionLink && !!link.availability;
+    return !!link.availability;
   });
   if (linkWithAvailability) {
     ({ availability, holds, copies } = linkWithAvailability);
   }
 
+  const publicationType = extractPublicationType(entry.unparsed);
+  const fallbackSeries = extractSeriesFromRaw(entry.unparsed);
+  const baseSeries = entry.series || fallbackSeries;
+  const series =
+    baseSeries && publicationType
+      ? { ...baseSeries, publicationType }
+      : baseSeries;
+
   return <BookData>{
     id: entry.id,
     title: entry.title,
-    series: entry.series,
+    series: series,
     authors: authors,
     contributors: contributors,
     subtitle: entry.subtitle,
@@ -192,6 +188,73 @@ export function entryToBook(entry: OPDSEntry, feedUrl: string): BookData {
     language: entry.language,
     url: detailUrl,
     raw: entry.unparsed
+  };
+}
+
+function extractPublicationType(rawEntry: any): string | undefined {
+  const rawSeries = rawEntry?.["schema:Series"] || rawEntry?.["schema:series"];
+  const rawSeriesNode = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries;
+  const rawSeriesAttributes = rawSeriesNode?.["$"] ?? rawSeriesNode;
+  const rawPublicationType =
+    rawSeriesAttributes?.["simplified:publicationType"]?.value ||
+    rawSeriesAttributes?.["simplified:publicationtype"]?.value ||
+    (typeof rawSeriesAttributes?.["simplified:publicationType"] === "string"
+      ? rawSeriesAttributes?.["simplified:publicationType"]
+      : undefined) ||
+    (typeof rawSeriesAttributes?.["simplified:publicationtype"] === "string"
+      ? rawSeriesAttributes?.["simplified:publicationtype"]
+      : undefined);
+
+  if (rawPublicationType) {
+    return String(rawPublicationType).trim().toLowerCase();
+  }
+
+  const belongsTo = rawEntry?.metadata?.belongsTo || rawEntry?.belongsTo;
+  for (const key of ["magazine", "journal", "newspaper", "periodical", "series"]) {
+    if (belongsTo?.[key]) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+function extractSeriesFromRaw(
+  rawEntry: any
+): { name: string; position?: number } | undefined {
+  const rawSeries = rawEntry?.["schema:Series"] || rawEntry?.["schema:series"];
+  const rawSeriesNode = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries;
+  const rawSeriesAttributes = rawSeriesNode?.["$"] ?? rawSeriesNode;
+
+  const rawName = rawSeriesAttributes?.name;
+  const rawIsPartOf = rawEntry?.["schema:isPartOf"];
+  const isPartOfNode = Array.isArray(rawIsPartOf) ? rawIsPartOf[0] : rawIsPartOf;
+  const isPartOfName =
+    typeof isPartOfNode === "string"
+      ? isPartOfNode
+      : isPartOfNode?._ || isPartOfNode?.name;
+  const name = rawName ?? isPartOfName;
+
+  const rawPositionNode = rawSeriesNode?.position;
+  const positionNode = Array.isArray(rawPositionNode)
+    ? rawPositionNode[0]
+    : rawPositionNode;
+  const rawPosition =
+    typeof positionNode === "string"
+      ? positionNode
+      : positionNode?._ ?? positionNode;
+  const parsedPosition =
+    rawPosition !== undefined ? Number(rawPosition) : undefined;
+  const position = Number.isFinite(parsedPosition) ? parsedPosition : undefined;
+
+  const trimmedName = typeof name === "string" ? name.trim() : "";
+  if (!trimmedName && position === undefined) {
+    return undefined;
+  }
+
+  return {
+    name: trimmedName || "Series",
+    position,
   };
 }
 
@@ -258,6 +321,56 @@ function OPDSLinkToLinkData(feedUrl, link: OPDSLink = null): LinkData | null {
   };
 }
 
+function isFeedLike(data: any): data is OPDSFeed {
+  return !!data && Array.isArray(data.entries);
+}
+
+function isEntryLike(data: any): data is OPDSEntry {
+  return !!data && Array.isArray(data.links) && !Array.isArray(data.entries);
+}
+
+function isArtworkLink(link: any): link is OPDSArtworkLink {
+  return !!link && OPDSArtworkLink.RELS.includes(link.rel);
+}
+
+function isCompleteEntryLink(link: any): link is CompleteEntryLink {
+  return !!link && link.type === CompleteEntryLink.TYPE;
+}
+
+function isFacetLink(link: any): link is OPDSFacetLink {
+  return !!link && link.rel === OPDSFacetLink.REL;
+}
+
+function isSearchLink(link: any): link is SearchLink {
+  return !!link && link.rel === SearchLink.REL;
+}
+
+function isCatalogRootLink(link: any): link is OPDSCatalogRootLink {
+  return !!link && link.rel === OPDSCatalogRootLink.REL;
+}
+
+function isShelfLink(link: any): link is OPDSShelfLink {
+  return !!link && link.rel === OPDSShelfLink.REL;
+}
+
+function isCollectionLink(link: any): link is OPDSCollectionLink {
+  return !!link && link.rel === OPDSCollectionLink.REL;
+}
+
+function isBookEntryLike(entry: any): boolean {
+  return (
+    !!entry &&
+    Array.isArray(entry.links) &&
+    (typeof entry.summary !== "undefined" ||
+      typeof entry.publisher !== "undefined" ||
+      typeof entry.series !== "undefined" ||
+      entry.links.some((link: any) =>
+        typeof link.rel === "string" &&
+        link.rel.startsWith(OPDSAcquisitionLink.BASE_REL)
+      ))
+  );
+}
+
 export function feedToCollection(
   feed: OPDSFeed,
   feedUrl: string
@@ -285,10 +398,10 @@ export function feedToCollection(
   let links: OPDSLink[] = [];
 
   feed.entries.forEach(entry => {
-    if (feed instanceof AcquisitionFeed) {
+    if (isBookEntryLike(entry)) {
       let book = entryToBook(entry, feedUrl);
       const collectionLink: OPDSCollectionLink = entry.links.find(
-        link => link instanceof OPDSCollectionLink
+        link => isCollectionLink(link)
       );
       if (collectionLink) {
         let { title, href } = collectionLink;
@@ -323,11 +436,11 @@ export function feedToCollection(
   let facetLinks: OPDSFacetLink[] = [];
   if (feed.links) {
     facetLinks = feed.links.filter(link => {
-      return link instanceof OPDSFacetLink;
+      return isFacetLink(link);
     });
 
     let searchLink = feed.links.find(link => {
-      return link instanceof SearchLink;
+      return isSearchLink(link);
     });
     if (searchLink) {
       search = { url: searchLink.href };
@@ -341,12 +454,12 @@ export function feedToCollection(
     }
 
     catalogRootLink = feed.links.find(link => {
-      return link instanceof OPDSCatalogRootLink;
+      return isCatalogRootLink(link);
     });
 
     parentLink = feed.links.find(link => link.rel === "up");
 
-    let shelfLink = feed.links.find(link => link instanceof OPDSShelfLink);
+    let shelfLink = feed.links.find(link => isShelfLink(link));
     if (shelfLink) {
       shelfUrl = shelfLink.href;
     }

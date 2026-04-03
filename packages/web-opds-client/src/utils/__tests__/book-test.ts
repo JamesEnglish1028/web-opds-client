@@ -38,6 +38,23 @@ describe("book utils", () => {
       ).to.equal("");
       expect(getMedium(book)).to.equal("http://bib.schema.org/Audiobook");
     });
+
+      it("returns PublicationIssue when schema additionalType is a periodical", () => {
+        const periodicalBook = {
+          ...book,
+          raw: {
+            $: {
+              "schema:additionalType": {
+                value: "http://schema.org/PublicationIssue"
+              }
+            }
+          }
+        } as BookData;
+
+        expect(getMedium(periodicalBook)).to.equal(
+          "http://schema.org/PublicationIssue"
+        );
+      });
   });
 
   describe("getMediumSVG function", () => {
@@ -60,5 +77,11 @@ describe("book utils", () => {
         mount(getMediumSVG("http://bib.schema.org/Audiobook", false)).text()
       ).to.equal("Audio/Headphone Icon ");
     });
+
+      it("returns periodical icon and label for PublicationIssue", () => {
+        expect(
+          mount(getMediumSVG("http://schema.org/PublicationIssue")).text()
+        ).to.equal("Periodical Icon Periodical");
+      });
   });
 });

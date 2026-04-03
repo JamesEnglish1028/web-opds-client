@@ -9,6 +9,8 @@ import {
 export interface SearchProps extends SearchData, React.HTMLProps<Search> {
   fetchSearchDescription?: (url: string) => void;
   allLanguageSearch?: boolean;
+  router?: any; // Optional router prop for navigation
+  pathFor?: (collectionUrl?: string | null, bookUrl?: string | null) => string; // Optional pathFor prop
 }
 
 /** Search box. */
@@ -21,11 +23,15 @@ export default class Search extends React.Component<SearchProps, {}> {
   }
 
   static contextTypes: React.ValidationMap<NavigateContext> = {
-    router: PropTypes.object.isRequired as React.Validator<RouterType>,
-    pathFor: PropTypes.func.isRequired
+    router: PropTypes.object as React.Validator<RouterType>,
+    pathFor: PropTypes.func
   };
 
   render(): JSX.Element {
+    console.log("[OPDS Search] render", {
+      searchData: this.props.searchData,
+      props: this.props
+    });
     return (
       <div className="search" role="search">
         {this.props.searchData && (
@@ -65,12 +71,24 @@ export default class Search extends React.Component<SearchProps, {}> {
   }
 
   onSubmit(event) {
+    console.log("[OPDS Search] onSubmit fired", {
+      searchData: this.props.searchData,
+      refs: this.refs
+    });
     let searchTerms = encodeURIComponent(this.refs["input"]["value"]);
-    let url = this.props.searchData?.template(searchTerms);
+    let url = this.props.searchData?.template?.(searchTerms);
     if (this.props.allLanguageSearch) {
       url += "&language=all";
     }
-    this.context.router?.push(this.context.pathFor(url, null));
+    console.log("[OPDS Search] Built URL:", url);
+    // Prefer props.router and props.pathFor if provided, else fallback to context
+    const router = this.props.router || this.context.router;
+    const pathFor = this.props.pathFor || this.context.pathFor;
+    if (router && pathFor) {
+      router.push(pathFor(url, null));
+    } else {
+      console.warn("[OPDS Search] No router or pathFor available for navigation");
+    }
     event.preventDefault();
   }
 }

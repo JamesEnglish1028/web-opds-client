@@ -48,7 +48,12 @@ export default class Book<P extends BookProps> extends React.Component<P, {}> {
     const authors = hasAuthors ? book.authors?.join(", ") : contributors;
 
     return (
-      <div className={`book ${showMediaIconClass}`} lang={book.language}>
+      <div
+        className={`book ${showMediaIconClass}`}
+        lang={book.language}
+        data-medium={bookMedium || undefined}
+        data-publication-type={book.series?.publicationType || undefined}
+      >
         <CatalogLink
           collectionUrl={this.props.collectionUrl}
           bookUrl={book.url || book.id}

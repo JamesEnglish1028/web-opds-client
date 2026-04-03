@@ -5,6 +5,7 @@ import CatalogLink from "./CatalogLink";
 import { Lanes } from "./Lanes";
 import FacetGroup from "./FacetGroup";
 import SkipNavigationLink from "./SkipNavigationLink";
+import EntryPointButtons from "./EntryPointButtons";
 import { CollectionData, FetchErrorData, BookData } from "../interfaces";
 
 export interface CollectionProps extends React.HTMLProps<Collection> {
@@ -15,6 +16,7 @@ export interface CollectionProps extends React.HTMLProps<Collection> {
   showCirculationLinks?: boolean;
   error?: FetchErrorData;
   fetchPage?: (url: string) => Promise<any>;
+  fetchCollection?: (url: string) => Promise<CollectionData>;
   updateBook: (url: string) => Promise<BookData>;
   fulfillBook: (url: string) => Promise<Blob>;
   indirectFulfillBook: (url: string, type: string) => Promise<string>;
@@ -42,6 +44,13 @@ export default class Collection extends React.Component<CollectionProps, {}> {
     this.getSelectedView = this.getSelectedView.bind(this);
     this.selectGridView = this.selectGridView.bind(this);
     this.selectListView = this.selectListView.bind(this);
+    this.onSelectEntry = this.onSelectEntry.bind(this);
+  }
+
+  onSelectEntry(url: string, label: string) {
+    if (this.props.fetchCollection) {
+      this.props.fetchCollection(url);
+    }
   }
 
   render(): JSX.Element {
@@ -88,6 +97,12 @@ export default class Collection extends React.Component<CollectionProps, {}> {
             ref="collection-main"
             aria-label={"books in " + this.props.collection.title}
           >
+            <EntryPointButtons
+              navigationLinks={this.props.collection.navigationLinks}
+              currentUrl={this.props.collection.url}
+              onSelectEntry={this.onSelectEntry}
+            />
+
             {this.props.collection.lanes &&
             this.props.collection.lanes.length > 0 ? (
               <Lanes

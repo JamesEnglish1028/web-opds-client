@@ -1,5 +1,4 @@
 import * as React from "react";
-import * as PropTypes from "prop-types";
 import { Store } from "redux";
 import { connect } from "react-redux";
 import { State } from "../state";
@@ -25,13 +24,11 @@ import {
   CollectionData,
   BookData,
   StateProps,
-  NavigateContext,
   AuthCallback,
   AuthProvider,
   AuthMethod,
   AuthCredentials,
-  FacetGroupData,
-  Router as RouterType
+  FacetGroupData
 } from "../interfaces";
 import AuthPlugin from "../AuthPlugin";
 import { loanedBookData, collectionDataWithLoans } from "../utils";
@@ -102,52 +99,51 @@ export interface RootProps extends StateProps {
   setPreference: (key: string, value: string) => void;
   allLanguageSearch?: boolean;
   fetcher?: DataFetcher;
+  /** Injected by RootWithContext from NavigationContext. Replaces legacy context.router.push. */
+  navigate?: (path: string) => void;
+  /** Injected by RootWithContext from PathForContext. Replaces legacy context.pathFor. */
+  pathFor?: (collectionUrl: string, bookUrl: string) => string;
 }
 
 export interface RootState {
   authError?: string | null;
+  lastCollectionData?: CollectionData | null;
 }
 
 /** The root component of the application that connects to the Redux store and
     passes props to other components. */
 export class Root extends React.Component<RootProps, RootState> {
-  context: NavigateContext;
-
-  static contextTypes: React.ValidationMap<NavigateContext> = {
-    router: PropTypes.object as React.Validator<RouterType>,
-    pathFor: PropTypes.func.isRequired
-  };
-
   constructor(props) {
     super(props);
-    this.state = {};
+    this.state = {
+      lastCollectionData: props.collectionData || null
+    };
   }
 
   render(): JSX.Element {
+    const stableCollectionData =
+      this.props.collectionData || this.state.lastCollectionData || null;
+
     let BookDetailsContainer = this.props.BookDetailsContainer;
     let Header = this.props.Header;
     let Footer = this.props.Footer;
     let CollectionContainer = this.props.CollectionContainer;
-    let collectionTitle = this.props.collectionData
-      ? this.props.collectionData.title
-      : null;
+    let collectionTitle = stableCollectionData ? stableCollectionData.title : null;
     let bookTitle = this.props.bookData ? this.props.bookData.title : null;
 
     let computeBreadcrumbs =
       this.props.computeBreadcrumbs || defaultComputeBreadcrumbs;
     let breadcrumbsLinks = computeBreadcrumbs(
-      this.props.collectionData,
+      stableCollectionData,
       this.props.history
     );
-    let showBreadcrumbs =
-      this.props.collectionData && breadcrumbsLinks.length > 0;
+    let showBreadcrumbs = stableCollectionData && breadcrumbsLinks.length > 0;
 
     let showCollection = this.props.collectionData && !this.props.bookData;
     const showBook = !!this.props.bookData;
     let showBookWrapper = this.props.bookUrl || this.props.bookData;
     let showUrlForm = !this.props.collectionUrl && !this.props.bookUrl;
-    let showSearch =
-      this.props.collectionData && this.props.collectionData.search;
+    let showSearch = stableCollectionData && stableCollectionData.search;
     // The tabs should only display if the component is passed and if
     // the catalog is being displayed and not a book.
     let showCollectionContainer = !!CollectionContainer && !showBook;
@@ -175,10 +171,16 @@ export class Root extends React.Component<RootProps, RootState> {
           >
             {showSearch && (
               <Search
-                url={this.props.collectionData?.search?.url}
-                searchData={this.props.collectionData?.search?.searchData}
+                url={stableCollectionData?.search?.url}
+                searchData={stableCollectionData?.search?.searchData}
                 fetchSearchDescription={this.props.fetchSearchDescription}
                 allLanguageSearch={allLanguageSearch}
+                router={
+                  this.props.navigate
+                    ? { push: this.props.navigate }
+                    : undefined
+                }
+                pathFor={this.props.pathFor}
               />
             )}
           </Header>
@@ -217,10 +219,16 @@ export class Root extends React.Component<RootProps, RootState> {
             )}
             {showSearch && (
               <Search
-                url={this.props.collectionData?.search?.url}
-                searchData={this.props.collectionData?.search?.searchData}
+                url={stableCollectionData?.search?.url}
+                searchData={stableCollectionData?.search?.searchData}
                 fetchSearchDescription={this.props.fetchSearchDescription}
                 allLanguageSearch={allLanguageSearch}
+                router={
+                  this.props.navigate
+                    ? { push: this.props.navigate }
+                    : undefined
+                }
+                pathFor={this.props.pathFor}
               />
             )}
           </div>
@@ -408,6 +416,13 @@ export class Root extends React.Component<RootProps, RootState> {
       );
     }
 
+    if (
+      nextProps.collectionData &&
+      nextProps.collectionData !== this.state.lastCollectionData
+    ) {
+      this.setState({ lastCollectionData: nextProps.collectionData });
+    }
+
     this.updatePageTitle(nextProps);
   }
 
@@ -429,7 +444,8 @@ export class Root extends React.Component<RootProps, RootState> {
 
   showRelativeBook(relativeIndex: number) {
     if (
-      this.context.router &&
+      this.props.navigate &&
+      this.props.pathFor &&
       this.props.collectionData &&
       this.props.bookData
     ) {
@@ -445,8 +461,8 @@ export class Root extends React.Component<RootProps, RootState> {
           (currentBookIndex + relativeIndex + bookIds.length) % bookIds.length;
         let nextBookUrl = books[nextBookIndex].url || books[nextBookIndex].id;
 
-        this.context.router.push(
-          this.context.pathFor(this.props.collectionData.url, nextBookUrl)
+        this.props.navigate(
+          this.props.pathFor(this.props.collectionData.url, nextBookUrl)
         );
       }
     }
@@ -461,4 +477,20 @@ const ConnectedRoot = connect(
   connectOptions
 )(Root);
 
-export default ConnectedRoot;
+import { PathForContext } from "./context/PathForContext";
+import { NavigationContext } from "./context/NavigationContext";
+
+type ConnectedRootProps = React.ComponentPropsWithoutRef<typeof ConnectedRoot>;
+
+/**
+ * Wrapper that reads navigate and pathFor from modern React context and
+ * forwards them as props to ConnectedRoot, replacing the legacy
+ * contextTypes: { router, pathFor } API.
+ */
+function RootWithContext(props: ConnectedRootProps) {
+  const navigate = React.useContext(NavigationContext);
+  const pathFor = React.useContext(PathForContext);
+  return <ConnectedRoot {...props} navigate={navigate} pathFor={pathFor} />;
+}
+
+export default RootWithContext;
